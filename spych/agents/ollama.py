@@ -7,13 +7,13 @@ import requests
 class OllamaResponder(BaseResponder):
     def __init__(
         self,
-        spych_object,
-        model="llama3.2:latest",
-        history_length=10,
-        host="http://localhost:11434",
-        listen_duration=5,
-        name="Ollama",
-    ):
+        spych_object: "Spych",
+        model: str = "llama3.2:latest",
+        history_length: int = 10,
+        host: str = "http://localhost:11434",
+        listen_duration: int | float = 5,
+        name: str | None = "Ollama",
+    ) -> None:
         """
         Usage:
 
@@ -67,7 +67,7 @@ class OllamaResponder(BaseResponder):
         self.host = host
         self.history = []
 
-    def respond(self, user_input):
+    def respond(self, user_input: str) -> str:
         """
         Usage:
 
@@ -113,8 +113,8 @@ def ollama(
     listen_duration: int | float = 5,
     history_length: int = 10,
     host: str = "http://localhost:11434",
-    spych_kwargs: dict = None,
-    spych_wake_kwargs: dict = None,
+    spych_kwargs: dict[str, any] | None = None,
+    spych_wake_kwargs: dict[str, any] | None = None,
 ) -> None:
     """
     Usage:

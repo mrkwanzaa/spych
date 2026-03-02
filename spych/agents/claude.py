@@ -7,11 +7,11 @@ import subprocess, json
 class LocalClaudeCodeCLIResponder(BaseResponder):
     def __init__(
         self,
-        spych_object,
-        continue_conversation=True,
-        listen_duration=5,
-        name="Claude Code",
-    ):
+        spych_object: "Spych",
+        continue_conversation: bool = True,
+        listen_duration: int | float = 5,
+        name: str | None = "Claude Code",
+    ) -> None:
         """
         Usage:
 
@@ -55,7 +55,7 @@ class LocalClaudeCodeCLIResponder(BaseResponder):
         self.continue_conversation = continue_conversation
         self.first_call = True
 
-    def respond(self, user_input):
+    def respond(self, user_input: str) -> str:
         """
         Usage:
 
@@ -90,8 +90,8 @@ def claude_code_cli(
     terminate_words: list[str] = ["terminate"],
     listen_duration: int | float = 5,
     continue_conversation: bool = True,
-    spych_kwargs: dict = None,
-    spych_wake_kwargs: dict = None,
+    spych_kwargs: dict[str, any] | None = None,
+    spych_wake_kwargs: dict[str, any] | None = None,
 ) -> None:
     """
     Usage:

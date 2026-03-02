@@ -1,8 +1,13 @@
 from spych.utils import Notify
-
+from typing import Optional
 
 class BaseResponder(Notify):
-    def __init__(self, spych_object, listen_duration=5, name: str = None):
+    def __init__(
+        self,
+        spych_object: "Spych",
+        listen_duration: int | float = 5,
+        name: Optional[str] = None,
+    ) -> None:
         """
         Usage:
 
@@ -38,7 +43,10 @@ class BaseResponder(Notify):
         self.listen_duration = listen_duration
         self.name = name if name else self.__class__.__name__
 
-    def respond(self, user_input):
+    def respond(
+        self,
+        user_input: str,
+    ) -> str:
         """
         Usage:
 
@@ -61,7 +69,7 @@ class BaseResponder(Notify):
             "Subclasses must implement the `respond` method"
         )
 
-    def on_listen_start(self):
+    def on_listen_start(self) -> None:
         """
         Usage:
 
@@ -76,7 +84,7 @@ class BaseResponder(Notify):
         print(f"Waiting {self.listen_duration}s for instructions...")
         return None
 
-    def on_user_input(self, user_input):
+    def on_user_input(self, user_input: str) -> None:
         """
         Usage:
 
@@ -96,7 +104,7 @@ class BaseResponder(Notify):
         """
         print("You: ", user_input)
 
-    def on_response(self, response):
+    def on_response(self, response: str) -> None:
         """
         Usage:
 
@@ -115,7 +123,7 @@ class BaseResponder(Notify):
         """
         print(f"{self.name}: ", response)
 
-    def on_listen_end(self):
+    def on_listen_end(self) -> str:
         """
         Usage:
 
@@ -130,7 +138,7 @@ class BaseResponder(Notify):
         """
         return print("=" * 20)
 
-    def __call__(self):
+    def __call__(self) -> str:
         """
         Usage:
 
