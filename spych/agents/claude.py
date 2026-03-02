@@ -3,9 +3,14 @@ from spych.core import Spych
 from spych.responders import BaseResponder
 import subprocess, json
 
+
 class LocalClaudeCodeCLIResponder(BaseResponder):
     def __init__(
-        self, spych_object, continue_conversation=True, listen_duration=5, name="Claude Code"
+        self,
+        spych_object,
+        continue_conversation=True,
+        listen_duration=5,
+        name="Claude Code",
     ):
         """
         Usage:
@@ -43,7 +48,9 @@ class LocalClaudeCodeCLIResponder(BaseResponder):
         - Claude Code must be installed and authenticated before use
         """
         super().__init__(
-            spych_object=spych_object, listen_duration=listen_duration, name=name
+            spych_object=spych_object,
+            listen_duration=listen_duration,
+            name=name,
         )
         self.continue_conversation = continue_conversation
         self.first_call = True
@@ -77,12 +84,14 @@ class LocalClaudeCodeCLIResponder(BaseResponder):
         except json.JSONDecodeError:
             return result.stdout.strip()
 
+
 def claude_code_cli(
-    whisper_device: str = "cpu",
     wake_words: list[str] = ["claude"],
     terminate_words: list[str] = ["terminate"],
     listen_duration: int | float = 5,
     continue_conversation: bool = True,
+    spych_kwargs: dict = None,
+    spych_wake_kwargs: dict = None,
 ) -> None:
     """
     Usage:
@@ -90,12 +99,6 @@ def claude_code_cli(
     - Starts a wake word listener that pipes detected speech into the Claude Code CLI
 
     Optional:
-
-    - `whisper_device`:
-        - Type: str
-        - What: The device to run the whisper models on
-        - Default: "cpu"
-        - Note: Use "cuda" for GPU acceleration if available
 
     - `wake_words`:
         - Type: list[str]
@@ -120,21 +123,40 @@ def claude_code_cli(
         - Type: bool
         - What: Whether to pass `--continue` to reuse the most recent session in Claude CLI
         - Default: True
+
+    - `spych_kwargs`:
+        - Type: dict
+        - What: Additional keyword arguments to pass to the Spych constructor
+        - Default: None
+
+    - `spych_wake_kwargs`:
+        - Type: dict
+        - What: Additional keyword arguments to pass to the SpychWake constructor
+        - Default: None
     """
-    spych_object = Spych(
-        whisper_model="base.en",
-        whisper_device=whisper_device
-    )
+    # Set default spych_kwargs if not provided
+    if spych_kwargs is None:
+        spych_kwargs = {}
+
+    # Set default spych_wake_kwargs if not provided
+    if spych_wake_kwargs is None:
+        spych_wake_kwargs = {}
+
+    # Merge kwargs with defaults
+    spych_kwargs = {"whisper_model": "base.en", **spych_kwargs}
+
+    spych_wake_kwargs = {
+        "whisper_model": "base.en",
+        "terminate_words": terminate_words,
+        **spych_wake_kwargs,
+    }
+
+    spych_object = Spych(**spych_kwargs)
     responder = LocalClaudeCodeCLIResponder(
         spych_object,
         continue_conversation=continue_conversation,
         listen_duration=listen_duration,
     )
     wake_word_map = {word: responder for word in wake_words}
-    wake_object = SpychWake(
-        wake_word_map=wake_word_map,
-        whisper_model="tiny.en",
-        whisper_device=whisper_device,
-        terminate_words=terminate_words,
-    )
+    wake_object = SpychWake(wake_word_map=wake_word_map, **spych_wake_kwargs)
     wake_object.start()

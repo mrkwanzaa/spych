@@ -3,6 +3,7 @@ from spych.core import Spych
 from spych.responders import BaseResponder
 import requests
 
+
 class OllamaResponder(BaseResponder):
     def __init__(
         self,
@@ -57,7 +58,9 @@ class OllamaResponder(BaseResponder):
             - Default: "Ollama"
         """
         super().__init__(
-            spych_object=spych_object, listen_duration=listen_duration, name=name
+            spych_object=spych_object,
+            listen_duration=listen_duration,
+            name=name,
         )
         self.model = model
         self.history_length = history_length
@@ -102,14 +105,16 @@ class OllamaResponder(BaseResponder):
         self.history = self.history[-self.history_length * 2 :]
         return response
 
+
 def ollama(
     model: str = "llama3.2:latest",
-    whisper_device: str = "cpu",
-    wake_words: list[str] = ["llama", "ollama"],
+    wake_words: list[str] = ["llama", "ollama", "lama"],
     terminate_words: list[str] = ["terminate"],
     listen_duration: int | float = 5,
     history_length: int = 10,
     host: str = "http://localhost:11434",
+    spych_kwargs: dict = None,
+    spych_wake_kwargs: dict = None,
 ) -> None:
     """
     Usage:
@@ -125,16 +130,10 @@ def ollama(
         - Default: "llama3.2:latest"
         - Note: Run `ollama list` in your terminal to see available models
 
-    - `whisper_device`:
-        - Type: str
-        - What: The device to run the whisper models on
-        - Default: "cpu"
-        - Note: Use "cuda" for GPU acceleration if available
-
     - `wake_words`:
         - Type: list[str]
         - What: A list of wake words that each trigger the Ollama responder
-        - Default: ["speech"]
+        - Default: ["llama", "ollama", "lama"]
         - Note: All wake words in this list map to the same OllamaResponder instance,
           sharing conversation history across triggers
 
@@ -161,11 +160,35 @@ def ollama(
         - Type: str
         - What: The base URL of the running Ollama instance
         - Default: "http://localhost:11434"
+
+    - `spych_kwargs`:
+        - Type: dict
+        - What: Additional keyword arguments to pass to the Spych constructor
+        - Default: None
+
+    - `spych_wake_kwargs`:
+        - Type: str
+        - What: Additional keyword arguments to pass to the SpychWake constructor
+        - Default: None
     """
-    spych_object = Spych(
-        whisper_model="base.en",
-        whisper_device=whisper_device
-    )
+    # Set default spych_kwargs if not provided
+    if spych_kwargs is None:
+        spych_kwargs = {}
+
+    # Set default spych_wake_kwargs if not provided
+    if spych_wake_kwargs is None:
+        spych_wake_kwargs = {}
+
+    # Merge kwargs with defaults
+    spych_kwargs = {"whisper_model": "base.en", **spych_kwargs}
+
+    spych_wake_kwargs = {
+        "whisper_model": "base.en",
+        "terminate_words": terminate_words,
+        **spych_wake_kwargs,
+    }
+
+    spych_object = Spych(**spych_kwargs)
     responder = OllamaResponder(
         spych_object=spych_object,
         model=model,
@@ -175,8 +198,6 @@ def ollama(
     )
     wake_object = SpychWake(
         wake_word_map={word: responder for word in wake_words},
-        whisper_model="tiny.en",
-        whisper_device=whisper_device,
-        terminate_words=terminate_words,
+        **spych_wake_kwargs,
     )
     wake_object.start()

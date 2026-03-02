@@ -6,7 +6,7 @@ from typing import Union
 class Spych(Notify):
     def __init__(
         self,
-        whisper_model: str = "base",
+        whisper_model: str = "base.en",
         whisper_device: str = "cpu",
         whisper_compute_type: str = "int8",
     ) -> None:
@@ -21,7 +21,7 @@ class Spych(Notify):
         - `whisper_model`:
             - Type: str
             - What: The faster-whisper model name to use for transcription
-            - Default: "base"
+            - Default: "base.en"
             - Note: Larger models (small, medium, large) provide better accuracy at
               the cost of speed; smaller models (tiny, base) are faster but less accurate
 
@@ -29,12 +29,14 @@ class Spych(Notify):
             - Type: str
             - What: The device to run the whisper model on
             - Default: "cpu"
+            - Options: "cpu", "cuda"
             - Note: Use "cuda" for GPU acceleration if available
 
         - `whisper_compute_type`:
             - Type: str
             - What: The compute type to use for the whisper model
             - Default: "int8"
+            - Options: "int8", "float16", "float32"
             - Note: "int8" offers a good balance of speed and accuracy on both CPU and GPU
         """
         self.wake_model = WhisperModel(

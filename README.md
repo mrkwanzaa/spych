@@ -35,19 +35,21 @@ For this example, pull the model first with `ollama pull llama3.2:latest`.
 from spych.agents import ollama
 
 # Say "llama" or "ollama" to trigger
+# Hint: I find saying "Hey Llama" works better than just "Llama" or "Ollama"
 ollama(model="llama3.2:latest")
 ```
 
 ### Claude Code CLI
 
-Requires [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to be installed in your **terminal** and authenticated. 
-- Verify with `claude --version` in your terminal. 
-- Fun side hint, you can run claude code with ollama if you want a fully offline experience. 
+Requires [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to be installed in your **terminal** and authenticated.
+- Verify with `claude --version` in your terminal.
+- Fun side hint, you can run claude code with ollama if you want a fully offline experience.
 
 ```python
 from spych.agents import claude_code_cli
 
 # Say "claude" to trigger
+# Hint: I find saying "Hey Claude" works better than just "Claude"
 claude_code_cli()
 ```
 
@@ -55,7 +57,6 @@ Both agents support a `terminate_words` list (default: `["terminate"]`) — sayi
 
 | Parameter | `ollama` default | `claude_code_cli` default | Description |
 |---|---|---|---|
-| `whisper_device` | `"cpu"` | `"cpu"` | `"cpu"` or `"cuda"` |
 | `wake_words` | `["llama", "ollama"]` | `["claude"]` | Words that trigger the agent |
 | `terminate_words` | `["terminate"]` | `["terminate"]` | Words that stop the listener |
 | `model` | `"llama3.2:latest"` | — | Ollama model name |
@@ -63,6 +64,8 @@ Both agents support a `terminate_words` list (default: `["terminate"]`) — sayi
 | `continue_conversation` | — | `True` | Whether to reuse the most recent session in Claude CLI |
 | `history_length` | `10` | — | Number of past interactions to include in the prompt sent to Ollama |
 | `host` | `"http://localhost:11434"` | — | URL of the Ollama instance to connect to |
+| `spych_kwargs` | — | — | Additional keyword arguments to pass to the Spych constructor |
+| `spych_wake_kwargs` | — | — | Additional keyword arguments to pass to the SpychWake constructor |
 
 ### Want a different agent?
 No problem! You can build your own custom agent by subclassing `BaseResponder` and passing an instance to `SpychWake`. See the API reference below for details.
@@ -82,7 +85,7 @@ If you want more control, use `SpychWake` and `Spych` directly.
 from spych import Spych
 
 spych_object = Spych(
-    whisper_model="base.en",
+    whisper_model="base.en", # We default to the english-only base.en, but all faster-whisper models are supported (tiny, base, small, medium, large)
     whisper_device="cpu",  # or "cuda" for faster performance if you have an Nvidia GPU with CUDA support
 )
 

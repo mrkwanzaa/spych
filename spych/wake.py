@@ -86,10 +86,11 @@ class SpychWakeListener(Notify):
         if self.should_stop():
             return
         wake_words = list(self.spych_wake_object.wake_word_map.keys())
+        wake_string = "[" + ", ".join(wake_words) + "]"
         segments, _ = self.spych_wake_object.wake_model.transcribe(
             audio_buffer,
             beam_size=2,
-            initial_prompt=f"Here are some words, you might hear: {str(wake_words)}. Respond with only the wake word if detected, otherwise respond with an empty string.",
+            initial_prompt=f"""Here are some wake words: {wake_string}. Only return what you understood was said, but place extra weight on those words if there is a tie.""",
         )
         for segment in segments:
             if self.should_stop():
@@ -114,7 +115,7 @@ class SpychWake(Notify):
         wake_listener_time=2,
         wake_listener_max_processing_time=0.5,
         device_index=-1,
-        whisper_model="tiny",
+        whisper_model="tiny.en",
         whisper_device="cpu",
         whisper_compute_type="int8",
     ):
@@ -176,7 +177,7 @@ class SpychWake(Notify):
         - `whisper_model`:
             - Type: str
             - What: The faster-whisper model name to use for wake word transcription
-            - Default: "tiny"
+            - Default: "tiny.en"
             - Note: Smaller models (tiny, base) are recommended here for low latency
 
         - `whisper_device`:
