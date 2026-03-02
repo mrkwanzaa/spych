@@ -1,0 +1,182 @@
+from spych.wake import SpychWake
+from spych.core import Spych
+from spych.responders import BaseResponder
+import requests
+
+class OllamaResponder(BaseResponder):
+    def __init__(
+        self,
+        spych_object,
+        model="llama3.2:latest",
+        history_length=10,
+        host="http://localhost:11434",
+        listen_duration=5,
+        name="Ollama",
+    ):
+        """
+        Usage:
+
+        - A responder that sends transcribed audio to a locally running Ollama instance
+          and returns the model's response
+
+        Requires:
+
+        - `spych_object`:
+            - Type: Spych
+            - What: An initialized Spych instance used to record and transcribe audio
+
+        Optional:
+
+        - `model`:
+            - Type: str
+            - What: The Ollama model name to use for generating responses
+            - Default: "llama3.2:latest"
+            - Note: Run `ollama list` in your terminal to see available models
+
+        - `history_length`:
+            - Type: int
+            - What: The number of previous interactions to include in each request for
+              conversational context
+            - Default: 10
+            - Note: Each interaction counts as one user message and one assistant message;
+              the actual history buffer is `history_length * 2` entries
+
+        - `host`:
+            - Type: str
+            - What: The base URL of the running Ollama instance
+            - Default: "http://localhost:11434"
+
+        - `listen_duration`:
+            - Type: int | float
+            - What: The number of seconds to listen for after the wake word is detected
+            - Default: 5
+
+        - `name`:
+            - Type: str
+            - What: A custom name for the responder to use in printed messages
+            - Default: "Ollama"
+        """
+        super().__init__(
+            spych_object=spych_object, listen_duration=listen_duration, name=name
+        )
+        self.model = model
+        self.history_length = history_length
+        self.host = host
+        self.history = []
+
+    def respond(self, user_input):
+        """
+        Usage:
+
+        - Sends the transcribed user input to Ollama and returns the model's response
+        - Maintains a rolling conversation history across calls
+
+        Requires:
+
+        - `user_input`:
+            - Type: str
+            - What: The transcribed text from the user's audio input
+
+        Returns:
+
+        - `response`:
+            - Type: str
+            - What: The response string from the Ollama model
+        """
+        self.history.append({"role": "user", "content": user_input})
+        prompt = (
+            "\n".join(
+                [
+                    f"{e['role'].capitalize()}: {e['content']}"
+                    for e in self.history
+                ]
+            )
+            + "\nAssistant:"
+        )
+        output = requests.post(
+            f"{self.host}/api/generate",
+            json={"model": self.model, "prompt": prompt, "stream": False},
+        )
+        response = output.json().get("response", "").strip()
+        self.history.append({"role": "assistant", "content": response})
+        self.history = self.history[-self.history_length * 2 :]
+        return response
+
+def ollama(
+    model: str = "llama3.2:latest",
+    whisper_device: str = "cpu",
+    wake_words: list[str] = ["llama", "ollama"],
+    terminate_words: list[str] = ["terminate"],
+    listen_duration: int | float = 5,
+    history_length: int = 10,
+    host: str = "http://localhost:11434",
+) -> None:
+    """
+    Usage:
+
+    - Starts a wake word listener that pipes detected speech into a locally running
+      Ollama instance
+
+    Optional:
+
+    - `model`:
+        - Type: str
+        - What: The Ollama model name to use for generating responses
+        - Default: "llama3.2:latest"
+        - Note: Run `ollama list` in your terminal to see available models
+
+    - `whisper_device`:
+        - Type: str
+        - What: The device to run the whisper models on
+        - Default: "cpu"
+        - Note: Use "cuda" for GPU acceleration if available
+
+    - `wake_words`:
+        - Type: list[str]
+        - What: A list of wake words that each trigger the Ollama responder
+        - Default: ["speech"]
+        - Note: All wake words in this list map to the same OllamaResponder instance,
+          sharing conversation history across triggers
+
+    - `terminate_words`:
+        - Type: list[str]
+        - What: A list of terminate words that each trigger the termination of the Ollama responder
+        - Default: ["terminate"]
+        - Note: All terminate words in this list map to the same OllamaResponder instance,
+            sharing conversation history across triggers
+
+    - `listen_duration`:
+        - Type: int | float
+        - What: The number of seconds to listen for after the wake word is detected
+        - Default: 5
+
+    - `history_length`:
+        - Type: int
+        - What: The number of previous interactions to include in each request for conversational context
+        - Default: 10
+        - Note: Each interaction counts as one user message and one assistant message; the actual history
+            buffer is `history_length * 2` entries
+
+    - `host`:
+        - Type: str
+        - What: The base URL of the running Ollama instance
+        - Default: "http://localhost:11434"
+    """
+    spych_object = Spych(
+        whisper_model="base.en",
+        whisper_device=whisper_device
+    )
+    responder = OllamaResponder(
+        spych_object=spych_object,
+        model=model,
+        listen_duration=listen_duration,
+        history_length=history_length,
+        host=host,
+    )
+    wake_object = SpychWake(
+        wake_word_map={word: responder for word in wake_words},
+        whisper_model="tiny.en",
+        whisper_device=whisper_device,
+        terminate_words=terminate_words,
+    )
+    wake_object.start()

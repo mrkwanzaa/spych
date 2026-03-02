@@ -216,5 +216,5 @@ Contributions are welcome! Please open an issue or submit a pull request.
 - Install dev requirements: `pip install -r requirements.txt`
 - Run tests: `./utils/test.sh`"""
 
-from .core import Spych
-from .wake import SpychWake
+from spych.core import Spych
+from spych.wake import SpychWake

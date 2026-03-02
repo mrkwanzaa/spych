@@ -1,9 +1,8 @@
-import subprocess, requests, json
 from spych.utils import Notify
 
 
 class BaseResponder(Notify):
-    def __init__(self, spych_object, listen_duration=5):
+    def __init__(self, spych_object, listen_duration=5, name: str = None):
         """
         Usage:
 
@@ -24,6 +23,11 @@ class BaseResponder(Notify):
             - What: The number of seconds to listen for after the wake word is detected
             - Default: 5
 
+        - `name`:
+            - Type: str
+            - What: A custom name for the responder to use in printed messages
+            - Default: The class name of the responder (e.g., "Ollama")
+
         Notes:
 
         - Subclasses must implement the `respond` method
@@ -32,7 +36,7 @@ class BaseResponder(Notify):
         """
         self.spych_object = spych_object
         self.listen_duration = listen_duration
-        self.name = self.__class__.__name__
+        self.name = name if name else self.__class__.__name__
 
     def respond(self, user_input):
         """
@@ -145,169 +149,3 @@ class BaseResponder(Notify):
         self.on_response(response)
         self.on_listen_end()
         return response
-
-
-class OllamaResponder(BaseResponder):
-    def __init__(
-        self,
-        spych_object,
-        model="llama3.2:latest",
-        history_length=10,
-        host="http://localhost:11434",
-        listen_duration=5,
-    ):
-        """
-        Usage:
-
-        - A responder that sends transcribed audio to a locally running Ollama instance
-          and returns the model's response
-
-        Requires:
-
-        - `spych_object`:
-            - Type: Spych
-            - What: An initialized Spych instance used to record and transcribe audio
-
-        Optional:
-
-        - `model`:
-            - Type: str
-            - What: The Ollama model name to use for generating responses
-            - Default: "llama3.2:latest"
-            - Note: Run `ollama list` in your terminal to see available models
-
-        - `history_length`:
-            - Type: int
-            - What: The number of previous interactions to include in each request for
-              conversational context
-            - Default: 10
-            - Note: Each interaction counts as one user message and one assistant message;
-              the actual history buffer is `history_length * 2` entries
-
-        - `host`:
-            - Type: str
-            - What: The base URL of the running Ollama instance
-            - Default: "http://localhost:11434"
-
-        - `listen_duration`:
-            - Type: int | float
-            - What: The number of seconds to listen for after the wake word is detected
-            - Default: 5
-        """
-        super().__init__(
-            spych_object=spych_object, listen_duration=listen_duration
-        )
-        self.name = "Ollama"
-        self.model = model
-        self.history_length = history_length
-        self.host = host
-        self.history = []
-
-    def respond(self, user_input):
-        """
-        Usage:
-
-        - Sends the transcribed user input to Ollama and returns the model's response
-        - Maintains a rolling conversation history across calls
-
-        Requires:
-
-        - `user_input`:
-            - Type: str
-            - What: The transcribed text from the user's audio input
-
-        Returns:
-
-        - `response`:
-            - Type: str
-            - What: The response string from the Ollama model
-        """
-        self.history.append({"role": "user", "content": user_input})
-        prompt = (
-            "\n".join(
-                [
-                    f"{e['role'].capitalize()}: {e['content']}"
-                    for e in self.history
-                ]
-            )
-            + "\nAssistant:"
-        )
-        output = requests.post(
-            f"{self.host}/api/generate",
-            json={"model": self.model, "prompt": prompt, "stream": False},
-        )
-        response = output.json().get("response", "").strip()
-        self.history.append({"role": "assistant", "content": response})
-        self.history = self.history[-self.history_length * 2 :]
-        return response
-
-
-class LocalClaudeCodeCLIResponder(BaseResponder):
-    def __init__(
-        self, spych_object, continue_conversation=True, listen_duration=5
-    ):
-        """
-        Usage:
-
-        - A responder that pipes transcribed audio into the Claude Code CLI (`claude -p`)
-          and returns the final response, waiting for all tool calls to complete
-
-        Requires:
-
-        - `spych_object`:
-            - Type: Spych
-            - What: An initialized Spych instance used to record and transcribe audio
-
-        Optional:
-
-        - `continue_conversation`:
-            - Type: bool
-            - What: Whether to pass `--continue` to reuse the most recent session
-            - Default: True
-
-        - `listen_duration`:
-            - Type: int | float
-            - What: The number of seconds to listen for after the wake word is detected
-            - Default: 5
-
-        Notes:
-
-        - Uses `--output-format json` so the subprocess blocks until Claude has finished
-          all tool calls and returns only the final result, not intermediate tool call XML
-        - Claude Code must be installed and authenticated before use
-        """
-        super().__init__(
-            spych_object=spych_object, listen_duration=listen_duration
-        )
-        self.name = "Claude Code"
-        self.continue_conversation = continue_conversation
-        self.first_call = True
-
-    def respond(self, user_input):
-        """
-        Usage:
-
-        - Pipes the transcribed user input into `claude -p` and returns the final response
-          after all tool calls have completed
-
-        Requires:
-
-        - `user_input`:
-            - Type: str
-            - What: The transcribed text from the user's audio input
-
-        Returns:
-
-        - `response`:
-            - Type: str
-            - What: The final response string from Claude Code
-        """
-        cmd = ["claude", "-p", user_input, "--output-format", "json"]
-        if self.continue_conversation and not self.first_call:
-            cmd.append("--continue")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        self.first_call = False
-        try:
-            return json.loads(result.stdout).get("result", "").strip()
-        except json.JSONDecodeError:
-            return result.stdout.strip()

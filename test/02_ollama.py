@@ -1,4 +1,4 @@
-from spych.agents import claude_code_cli, ollama
+from spych.agents import ollama
 
 print("Starting Ollama agent")
 print("Listening for wake word 'llama'...")
