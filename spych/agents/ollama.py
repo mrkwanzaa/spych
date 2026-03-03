@@ -1,5 +1,5 @@
-from spych.wake import SpychWake
 from spych.core import Spych
+from spych.wake import SpychWake
 from spych.responders import BaseResponder
 import requests
 
@@ -18,7 +18,7 @@ class OllamaResponder(BaseResponder):
         Usage:
 
         - A responder that sends transcribed audio to a locally running Ollama instance
-          and returns the model's response
+          and returns the model's response.
 
         Requires:
 
@@ -61,6 +61,7 @@ class OllamaResponder(BaseResponder):
             spych_object=spych_object,
             listen_duration=listen_duration,
             name=name,
+            interactive=False,
         )
         self.model = model
         self.history_length = history_length
@@ -71,8 +72,8 @@ class OllamaResponder(BaseResponder):
         """
         Usage:
 
-        - Sends the transcribed user input to Ollama and returns the model's response
-        - Maintains a rolling conversation history across calls
+        - Sends the transcribed user input to Ollama and returns the model's response.
+        - Maintains a rolling conversation history across calls.
 
         Requires:
 
@@ -89,20 +90,20 @@ class OllamaResponder(BaseResponder):
         self.history.append({"role": "user", "content": user_input})
         prompt = (
             "\n".join(
-                [
-                    f"{e['role'].capitalize()}: {e['content']}"
-                    for e in self.history
-                ]
+                f"{e['role'].capitalize()}: {e['content']}"
+                for e in self.history
             )
             + "\nAssistant:"
         )
+
         output = requests.post(
             f"{self.host}/api/generate",
             json={"model": self.model, "prompt": prompt, "stream": False},
         )
+
         response = output.json().get("response", "").strip()
         self.history.append({"role": "assistant", "content": response})
-        self.history = self.history[-self.history_length * 2 :]
+        self.history = self.history[-self.history_length * 2:]
         return response
 
 
@@ -171,33 +172,28 @@ def ollama(
         - What: Additional keyword arguments to pass to the SpychWake constructor
         - Default: None
     """
-    # Set default spych_kwargs if not provided
-    if spych_kwargs is None:
-        spych_kwargs = {}
-
-    # Set default spych_wake_kwargs if not provided
-    if spych_wake_kwargs is None:
-        spych_wake_kwargs = {}
-
-    # Merge kwargs with defaults
-    spych_kwargs = {"whisper_model": "base.en", **spych_kwargs}
-
-    spych_wake_kwargs = {
-        "whisper_model": "base.en",
-        "terminate_words": terminate_words,
-        **spych_wake_kwargs,
-    }
-
+    # Spych Object
+    spych_kwargs = {"whisper_model": "base.en", **(spych_kwargs or {})}
     spych_object = Spych(**spych_kwargs)
+
+    # Responder Object
     responder = OllamaResponder(
         spych_object=spych_object,
         model=model,
         listen_duration=listen_duration,
         history_length=history_length,
-        host=host,
+        host=host
     )
-    wake_object = SpychWake(
-        wake_word_map={word: responder for word in wake_words},
-        **spych_wake_kwargs,
-    )
-    wake_object.start()
+
+    # SpychWake Object
+    spych_wake_kwargs = {
+        "whisper_model": "base.en", 
+        "wake_word_map": {word: responder for word in wake_words},
+        "terminate_words": terminate_words,
+        **(spych_wake_kwargs or {})
+    }
+    spych_wake_object = SpychWake(**spych_wake_kwargs)
+
+    # Fire ready message and start wake listener
+    responder.ready_message(wake_words, terminate_words)
+    spych_wake_object.start()

@@ -1,0 +1,161 @@
+import sys, time, threading, re
+
+
+class CliColor:
+    RESET   = "\033[0m"
+    BOLD    = "\033[1m"
+    DIM     = "\033[2m"
+    ITALIC  = "\033[3m"
+
+    # Foreground
+    WHITE   = "\033[97m"
+    GRAY    = "\033[90m"
+    CYAN    = "\033[96m"
+    BLUE    = "\033[94m"
+    MAGENTA = "\033[95m"
+    YELLOW  = "\033[93m"
+    GREEN   = "\033[92m"
+    RED     = "\033[91m"
+    ORANGE  = "\033[38;5;208m"
+
+    @staticmethod
+    def fg(hex_or_256: int) -> str:
+        return f"\033[38;5;{hex_or_256}m"
+
+
+class CliSpinner:
+    """
+    Animated terminal spinner that runs on a background thread.
+    Call .start(message) and .stop() around blocking work.
+    """
+
+    FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    COLORS = [CliColor.CYAN, CliColor.BLUE, CliColor.MAGENTA, CliColor.CYAN]
+
+    def __init__(self) -> None:
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._message = ""
+
+    def start(self, message: str = "Claude is thinking") -> None:
+        # Stop any existing spinner before starting a new one,
+        # preventing leaked threads from double start() calls.
+        if self._thread and self._thread.is_alive():
+            self.stop()
+        self._stop_event.clear()
+        self._message = message
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
+
+    def update(self, message: str) -> None:
+        self._message = message
+
+    def stop(self, final_message: str | None = None) -> None:
+        self._stop_event.set()
+        # Guard join() so it's only called when the thread actually ran.
+        if self._thread and self._thread.is_alive():
+            self._thread.join()
+        self._thread = None
+        # Clear the spinner line
+        sys.stdout.write("\r\033[2K")
+        sys.stdout.flush()
+        if final_message:
+            print(final_message)
+
+    def _spin(self) -> None:
+        frame_idx = 0
+        color_idx = 0
+        dot_count = 0
+        while not self._stop_event.is_set():
+            frame = self.FRAMES[frame_idx % len(self.FRAMES)]
+            color = self.COLORS[color_idx % len(self.COLORS)]
+            dots  = "." * (dot_count % 4)
+
+            line = (
+                f"\r  {color}{CliColor.BOLD}{frame}{CliColor.RESET}  "
+                f"{CliColor.WHITE}{self._message}{CliColor.GRAY}{dots:<3}{CliColor.RESET}"
+            )
+            sys.stdout.write(line)
+            sys.stdout.flush()
+
+            time.sleep(0.08)
+            frame_idx += 1
+            if frame_idx % 5 == 0:
+                dot_count += 1
+            if frame_idx % 20 == 0:
+                color_idx += 1
+
+
+# Helper to strip ANSI escape codes before measuring string length,
+# so box-drawing alignment is based on visible characters only.
+_ANSI_ESCAPE_RE = re.compile(r"\033\[[0-9;]*m")
+
+def _visible_len(text: str) -> int:
+    return len(_ANSI_ESCAPE_RE.sub("", text))
+
+
+class CliPrinter:
+    @staticmethod
+    def divider(char: str = "─", width: int = 60, color: str = CliColor.GRAY) -> None:
+        print(f"{color}{char * width}{CliColor.RESET}")
+
+    @staticmethod
+    def header(label: str, text: str) -> None:
+        inner = f"  {label}  {text}"
+        pad = max(0, 58 - _visible_len(inner))
+        print(
+            f"\n{CliColor.GRAY}┌{'─' * 58}┐{CliColor.RESET}\n"
+            f"{CliColor.GRAY}│{CliColor.RESET}  {CliColor.CYAN}{CliColor.BOLD}{label}{CliColor.RESET}  "
+            f"{CliColor.WHITE}{text}{CliColor.RESET}"
+            f"{' ' * pad}{CliColor.GRAY}│{CliColor.RESET}\n"
+            f"{CliColor.GRAY}└{'─' * 58}┘{CliColor.RESET}"
+        )
+
+    @staticmethod
+    def label(tag: str, text: str, color: str = CliColor.CYAN) -> None:
+        print(f"  {color}{CliColor.BOLD}{tag:<12}{CliColor.RESET}{CliColor.WHITE}{text}{CliColor.RESET}")
+
+    @staticmethod
+    def tool_event(tool_name: str, status: str = "running") -> None:
+        icon  = "⚙" if status == "running" else "✓"
+        color = CliColor.YELLOW if status == "running" else CliColor.GREEN
+        print(f"  {color}{icon}{CliColor.RESET}  {CliColor.DIM}tool:{CliColor.RESET} {CliColor.ITALIC}{tool_name}{CliColor.RESET}")
+
+    @staticmethod
+    def info(message: str, color: str = CliColor.CYAN) -> None:
+        """
+        Usage:
+
+        - Print a single informational line. Useful from inside respond() to
+          surface status updates without touching the spinner directly.
+
+        Requires:
+
+        - `message`:
+            - Type: str
+            - What: The message to print
+
+        Optional:
+
+        - `color`:
+            - Type: str (CliColor constant)
+            - What: ANSI color code for the message
+            - Default: CliColor.CYAN
+        """
+        print(f"  {color}{CliColor.BOLD}ℹ{CliColor.RESET}  {CliColor.WHITE}{message}{CliColor.RESET}")
+
+    @staticmethod
+    def typewrite(text: str, delay: float = 0.008) -> None:
+        """Print text with a subtle typewriter effect."""
+        for ch in text:
+            sys.stdout.write(ch)
+            sys.stdout.flush()
+            time.sleep(delay)
+        print()
+
+    @staticmethod
+    def print_response(name: str, text: str) -> None:
+        """Render the final response with light formatting."""
+        print(f"  {CliColor.MAGENTA}{CliColor.BOLD}{name}:{CliColor.RESET}")
+        print()
+        print(text)
