@@ -1,6 +1,13 @@
 import sys, time, threading, re, random
 
 
+# Helper to strip ANSI escape codes before measuring string length,
+# so box-drawing alignment is based on visible characters only.
+_ANSI_ESCAPE_RE = re.compile(r"\033\[[0-9;]*m")
+
+def _visible_len(text: str) -> int:
+    return len(_ANSI_ESCAPE_RE.sub("", text))
+
 class CliColor:
     RESET   = "\033[0m"
     BOLD    = "\033[1m"
@@ -78,14 +85,17 @@ class CliSpinner:
         self._stop_event = threading.Event()
         self._message = ""
         self._verb_thread: threading.Thread | None = None
+        self._running = False
 
-    def start(self, message: str) -> None:
+    def start(self, message: str | None = None) -> None:
         # Stop any existing spinner before starting a new one,
         # preventing leaked threads from double start() calls.
         if self._thread and self._thread.is_alive():
             self.stop()
+        self._running = True
         self._stop_event.clear()
-        self._message = message
+        if message:
+            self._message = message
         self._thread = threading.Thread(target=self._spin, daemon=True)
         self._thread.start()
 
@@ -136,6 +146,8 @@ class CliSpinner:
         self._message = message
 
     def stop(self, final_message: str | None = None) -> None:
+        was_running = self._running
+        self._running = False
         self._stop_event.set()
         # Guard join() so it's only called when the thread actually ran.
         if self._thread and self._thread.is_alive():
@@ -149,6 +161,8 @@ class CliSpinner:
         sys.stdout.flush()
         if final_message:
             print(final_message)
+        return was_running
+        
 
     def _spin(self) -> None:
         frame_idx = 0
@@ -160,7 +174,7 @@ class CliSpinner:
             dots  = "." * (dot_count % 4)
 
             visible_content = f"  {frame}  {self._message}{dots:<3}"
-            padding = max(0, 60 - len(visible_content)) * " "
+            padding = max(0, 60 - _visible_len(visible_content)) * " "
             line = (
                 f"\r  {color}{CliColor.BOLD}{frame}{CliColor.RESET}  "
                 f"{CliColor.WHITE}{self._message}{CliColor.GRAY}{dots:<3}{CliColor.RESET}"
@@ -175,14 +189,6 @@ class CliSpinner:
                 dot_count += 1
             if frame_idx % 20 == 0:
                 color_idx += 1
-
-
-# Helper to strip ANSI escape codes before measuring string length,
-# so box-drawing alignment is based on visible characters only.
-_ANSI_ESCAPE_RE = re.compile(r"\033\[[0-9;]*m")
-
-def _visible_len(text: str) -> int:
-    return len(_ANSI_ESCAPE_RE.sub("", text))
 
 
 class CliPrinter:
@@ -213,13 +219,14 @@ class CliPrinter:
 
     @staticmethod
     def label(tag: str, text: str, color: str = CliColor.CYAN) -> None:
-        print(f"  {color}{CliColor.BOLD}{tag:<12}{CliColor.RESET}{CliColor.WHITE}{text}{CliColor.RESET}")
+        print(f"  {color}{CliColor.BOLD}{tag}{CliColor.RESET} {CliColor.WHITE}{text}{CliColor.RESET}")
 
     @staticmethod
-    def tool_event(tool_name: str, status: str = "running") -> None:
-        icon  = "⚙" if status == "running" else "✓"
-        color = CliColor.YELLOW if status == "running" else CliColor.GREEN
-        print(f"  {color}{icon}{CliColor.RESET}  {CliColor.DIM}tool:{CliColor.RESET} {CliColor.ITALIC}{tool_name}{CliColor.RESET}")
+    def tool_event(tool_name: str, status: str, is_running: bool = False, elapsed: float | None = None) -> None:
+        icon  = "⚙" if is_running else "✓"
+        color = CliColor.YELLOW if is_running else CliColor.GREEN
+        elapsed_str = f" {CliColor.GRAY}({elapsed:.2f}s){CliColor.RESET}" if elapsed else ""
+        print(f"  {color}{icon}{CliColor.RESET}  {CliColor.DIM}tool:{CliColor.RESET} {CliColor.ITALIC}{tool_name}{CliColor.RESET} -> {CliColor.GRAY}{status}{elapsed_str}")
 
     @staticmethod
     def info(message: str, color: str = CliColor.CYAN) -> None:
@@ -264,4 +271,4 @@ class CliPrinter:
     def print_status(name: str, success: bool, elapsed: float) -> None:
         icon = "✓" if success else "✗"
         color = CliColor.GREEN if success else CliColor.RED
-        print(f"\n{color}{icon}{CliColor.RESET} {CliColor.DIM}{name} {elapsed:.2f}s{CliColor.RESET}")
+        print(f"\n  {color}{icon}{CliColor.RESET} {CliColor.DIM}{name} {elapsed:.2f}s{CliColor.RESET}")

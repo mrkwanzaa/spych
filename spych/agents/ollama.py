@@ -61,7 +61,6 @@ class OllamaResponder(BaseResponder):
             spych_object=spych_object,
             listen_duration=listen_duration,
             name=name,
-            interactive=False,
         )
         self.model = model
         self.history_length = history_length
@@ -187,7 +186,8 @@ def ollama(
 
     # SpychWake Object
     spych_wake_kwargs = {
-        "whisper_model": "base.en", 
+        "whisper_model": "base.en",
+        "on_terminate": responder.on_terminate,
         "wake_word_map": {word: responder for word in wake_words},
         "terminate_words": terminate_words,
         **(spych_wake_kwargs or {})
