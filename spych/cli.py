@@ -1,4 +1,4 @@
-import sys, time, threading, re
+import sys, time, threading, re, random
 
 
 class CliColor:
@@ -32,12 +32,54 @@ class CliSpinner:
     FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     COLORS = [CliColor.CYAN, CliColor.BLUE, CliColor.MAGENTA, CliColor.CYAN]
 
+    DEFAULT_VERBS = [
+        "thinking",
+        "vibing",
+        "pontificating",
+        "contemplating",
+        "deliberating",
+        "cogitating",
+        "ruminating",
+        "musing",
+        "ideating",
+        "postulating",
+        "hypothesizing",
+        "extrapolating",
+        "philosophizing",
+        "noodling",
+        "percolating",
+        "marinating",
+        "stewing",
+        "scheming",
+        "conniving",
+        "divining",
+        "spelunking",
+        "ratiocinating",
+        "cerebrating",
+        "woolgathering",
+        "daydreaming",
+        "lucubrating",
+        "excogitating",
+        "thinkulating",
+        "brainwaving",
+        "cogitronning",
+        "synapsing",
+        "thoughtcrafting",
+        "mindweaving",
+        "intellectualizing",
+        "computating",
+        "ponderizing",
+        "mentalating",
+        "brainbrewing",
+    ]
+
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._message = ""
+        self._verb_thread: threading.Thread | None = None
 
-    def start(self, message: str = "Claude is thinking") -> None:
+    def start(self, message: str) -> None:
         # Stop any existing spinner before starting a new one,
         # preventing leaked threads from double start() calls.
         if self._thread and self._thread.is_alive():
@@ -46,6 +88,49 @@ class CliSpinner:
         self._message = message
         self._thread = threading.Thread(target=self._spin, daemon=True)
         self._thread.start()
+
+    def start_with_verbs(
+        self,
+        name: str,
+        verbs: list[str] | None = None,
+        interval: float = 10.0,
+    ) -> None:
+        """
+        Start the spinner with a cycling verb message: "<name> is <verb>".
+        The verb rotates through `verbs` every `interval` seconds.
+
+        Requires:
+
+        - `name`:
+            - Type: str
+            - What: The subject displayed before the verb (e.g. "Claude")
+
+        Optional:
+
+        - `verbs`:
+            - Type: list[str] | None
+            - What: Verbs to cycle through. Defaults to CliSpinner.DEFAULT_VERBS
+            - Default: None
+
+        - `interval`:
+            - Type: float
+            - What: Seconds between each verb swap
+            - Default: 10.0
+        """
+        verbs = verbs if verbs is not None else self.DEFAULT_VERBS
+
+        def _get_random_message():
+            idx = random.randrange(len(verbs))
+            return f"{name} is {verbs[idx]}"
+        
+        self.start(_get_random_message())
+
+        def _verb_cycle() -> None:
+            while not self._stop_event.wait(timeout=interval):
+                self.update(_get_random_message())
+
+        self._verb_thread = threading.Thread(target=_verb_cycle, daemon=True)
+        self._verb_thread.start()
 
     def update(self, message: str) -> None:
         self._message = message
@@ -56,6 +141,9 @@ class CliSpinner:
         if self._thread and self._thread.is_alive():
             self._thread.join()
         self._thread = None
+        if self._verb_thread and self._verb_thread.is_alive():
+            self._verb_thread.join()
+        self._verb_thread = None
         # Clear the spinner line
         sys.stdout.write("\r\033[2K")
         sys.stdout.flush()
@@ -71,9 +159,12 @@ class CliSpinner:
             color = self.COLORS[color_idx % len(self.COLORS)]
             dots  = "." * (dot_count % 4)
 
+            visible_content = f"  {frame}  {self._message}{dots:<3}"
+            padding = max(0, 60 - len(visible_content)) * " "
             line = (
                 f"\r  {color}{CliColor.BOLD}{frame}{CliColor.RESET}  "
                 f"{CliColor.WHITE}{self._message}{CliColor.GRAY}{dots:<3}{CliColor.RESET}"
+                f"{padding}"
             )
             sys.stdout.write(line)
             sys.stdout.flush()
@@ -100,16 +191,25 @@ class CliPrinter:
         print(f"{color}{char * width}{CliColor.RESET}")
 
     @staticmethod
-    def header(label: str, text: str) -> None:
-        inner = f"  {label}  {text}"
+    def empty_line() -> None:
+        """Create an empty line for spacing."""
+        print()
+
+    @staticmethod
+    def header(label: str) -> None:
+        inner = f"  {CliColor.CYAN}{CliColor.BOLD}Spych{CliColor.RESET}: {CliColor.WHITE}{label}{CliColor.RESET}"
         pad = max(0, 58 - _visible_len(inner))
         print(
             f"\n{CliColor.GRAY}┌{'─' * 58}┐{CliColor.RESET}\n"
-            f"{CliColor.GRAY}│{CliColor.RESET}  {CliColor.CYAN}{CliColor.BOLD}{label}{CliColor.RESET}  "
-            f"{CliColor.WHITE}{text}{CliColor.RESET}"
+            f"{CliColor.GRAY}│{CliColor.RESET}{inner}{CliColor.RESET}"
             f"{' ' * pad}{CliColor.GRAY}│{CliColor.RESET}\n"
             f"{CliColor.GRAY}└{'─' * 58}┘{CliColor.RESET}"
         )
+
+    @staticmethod
+    def kwarg_inputs(**kwargs) -> None:
+        for key, value in kwargs.items():
+            print(f"  {CliColor.GRAY}{key}{CliColor.RESET}: {CliColor.WHITE}{value}{CliColor.RESET}")
 
     @staticmethod
     def label(tag: str, text: str, color: str = CliColor.CYAN) -> None:
@@ -142,7 +242,7 @@ class CliPrinter:
             - What: ANSI color code for the message
             - Default: CliColor.CYAN
         """
-        print(f"  {color}{CliColor.BOLD}ℹ{CliColor.RESET}  {CliColor.WHITE}{message}{CliColor.RESET}")
+        print(f"  {color}{CliColor.BOLD}i{CliColor.RESET}  {CliColor.WHITE}{message}{CliColor.RESET}")
 
     @staticmethod
     def typewrite(text: str, delay: float = 0.008) -> None:
@@ -159,3 +259,9 @@ class CliPrinter:
         print(f"  {CliColor.MAGENTA}{CliColor.BOLD}{name}:{CliColor.RESET}")
         print()
         print(text)
+
+    @staticmethod
+    def print_status(name: str, success: bool, elapsed: float) -> None:
+        icon = "✓" if success else "✗"
+        color = CliColor.GREEN if success else CliColor.RED
+        print(f"\n{color}{icon}{CliColor.RESET} {CliColor.DIM}{name} {elapsed:.2f}s{CliColor.RESET}")

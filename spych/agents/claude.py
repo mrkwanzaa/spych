@@ -95,10 +95,26 @@ class LocalClaudeCodeCLIResponder(BaseResponder):
             "just that question and nothing else."
         ).format(input=user_input)
 
-        result = subprocess.run(
-            ["claude", "-p", preflight_prompt, "--output-format", "json"],
-            capture_output=True, text=True,
-        )
+        try:
+            result = subprocess.run(
+                ["claude", "-p", preflight_prompt, "--output-format", "json"],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"\n  {CliColor.YELLOW}⚠ Clarification check timed out. "
+                f"Proceeding with original input.{CliColor.RESET}\n"
+            )
+            return user_input
+        except Exception as e:
+            print(
+                f"\n  {CliColor.YELLOW}⚠ Clarification check failed "
+                f"(error: {e}). "
+                f"Proceeding with original input.{CliColor.RESET}\n"
+            )
+            return user_input
 
         if result.returncode != 0:
             err = result.stderr.strip() or "unknown error"
@@ -109,20 +125,26 @@ class LocalClaudeCodeCLIResponder(BaseResponder):
             )
             return user_input
 
+        # Parse the JSON response
         try:
-            answer = json.loads(result.stdout).get("result", "CLEAR").strip()
+            parsed_response = json.loads(result.stdout)
+            answer = parsed_response.get("result", "CLEAR").strip()
         except json.JSONDecodeError:
+            # If JSON parsing fails, use raw stdout
             answer = result.stdout.strip()
 
+        # If no clarification is needed, return original input
         if answer.upper().startswith("CLEAR") or not answer:
             return user_input
 
+        # Ask for clarification and append to input
         print(
             f"\n  {CliColor.YELLOW}{CliColor.BOLD}? Clarification needed{CliColor.RESET}\n"
             f"  {CliColor.WHITE}{answer}{CliColor.RESET}"
         )
+
         try:
-            reply = input(f"  {CliColor.CYAN}▶ Your answer:{CliColor.RESET} ").strip()
+            reply = input(f"  {CliColor.CYAN}Your answer:{CliColor.RESET} ").strip()
         except (EOFError, KeyboardInterrupt):
             reply = ""
 
@@ -168,15 +190,15 @@ class LocalClaudeCodeCLIResponder(BaseResponder):
                     tool_name = obj.get("tool_name")
                     if tool_name and tool_name not in seen_tools:
                         seen_tools.add(tool_name)
-                        self._spinner.stop()
+                        self.spinner.stop()
                         CliPrinter.tool_event(tool_name, "running")
-                        self._spinner.start(f"Running {tool_name}")
+                        self.spinner.start(f"Running {tool_name}")
 
                     if obj.get("type") == "result" or "result" in obj:
                         candidate = obj.get("result", "")
                         if candidate:
                             final_result = candidate
-                            self._spinner.update("Finishing up")
+                            self.spinner.update("Finishing up")
                 continue
             except json.JSONDecodeError:
                 pass
@@ -186,9 +208,9 @@ class LocalClaudeCodeCLIResponder(BaseResponder):
                 tool_name = tool_match.group(1)
                 if tool_name not in seen_tools:
                     seen_tools.add(tool_name)
-                    self._spinner.stop()
+                    self.spinner.stop()
                     CliPrinter.tool_event(tool_name, "running")
-                    self._spinner.start(f"Running {tool_name}")
+                    self.spinner.start(f"Running {tool_name}")
 
         process.wait()
 

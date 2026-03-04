@@ -25,10 +25,11 @@ class BaseResponder(Notify):
 
         - Public helper methods are available inside `respond()` for common
           UI needs without importing CLI internals:
-            - `self.emit_tool_event(name, status)`  — show a tool-call line
-            - `self.update_spinner(message)`         — change the spinner label
-            - `self.pause_spinner()`                 — stop spinner (e.g. before printing)
-            - `self.resume_spinner(message)`         — restart spinner after a pause
+
+            - `self.emit_tool_event(name, status)`   — show a tool-call line
+            - `self.spinner.start(message)`          — restart spinner after a pause
+            - `self.spinner.update(message)`         — change the spinner label
+            - `self.spinner.stop()`                  — stop spinner (e.g. before printing)
             - `self.print_info(message, color)`      — print a styled info line
 
         Requires:
@@ -67,7 +68,7 @@ class BaseResponder(Notify):
         self.listen_duration = listen_duration
         self.name = name if name else self.__class__.__name__
         self.interactive = interactive
-        self._spinner = CliSpinner()
+        self.spinner = CliSpinner()
         self._enriched_input: str = ""
         self._start_time: float = 0.0
 
@@ -97,58 +98,12 @@ class BaseResponder(Notify):
             - What: Controls the icon and color of the event line
             - Default: "running"
         """
-        self._spinner.stop()
+        self.spinner.stop()
         CliPrinter.tool_event(tool_name, status)
-        if status == "running":
-            self._spinner.start(f"Running {tool_name}")
-        else:
-            self._spinner.start(f"{self.name} is thinking")
 
     def wait_for_next_wake_word(self):
         CliPrinter.divider("─", 60, CliColor.GRAY)
-        self.start_spinner(f"Waiting for wake word")
-
-    def start_spinner(self, message: str) -> None:
-        """Start the spinner with a custom message."""
-        self._spinner.start(message)
-
-    def update_spinner(self, message: str) -> None:
-        """
-        Usage:
-
-        - Update the spinner's status message without stopping it.
-          Useful for multi-stage work inside `respond()`.
-
-        Requires:
-
-        - `message`:
-            - Type: str
-            - What: The new label shown next to the spinner
-        """
-        self._spinner.update(message)
-
-    def pause_spinner(self) -> None:
-        """
-        Usage:
-
-        - Stop the spinner and clear the line so you can print freely.
-          Call `resume_spinner()` when done printing.
-        """
-        self._spinner.stop()
-
-    def resume_spinner(self, message: str | None = None) -> None:
-        """
-        Usage:
-
-        - Restart the spinner after a `pause_spinner()` call.
-
-        Optional:
-
-        - `message`:
-            - Type: str
-            - What: Spinner label to use; defaults to "<name> is thinking"
-        """
-        self._spinner.start(message or f"{self.name} is thinking")
+        self.spinner.start(f"Waiting for wake word")
 
     def print_info(self, message: str, color: str = CliColor.CYAN) -> None:
         """
@@ -171,9 +126,10 @@ class BaseResponder(Notify):
             - What: ANSI color for the info icon
             - Default: CliColor.CYAN
         """
-        self._spinner.stop()
+        spinner_message = self.spinner._message  # Capture current spinner message to restore after printing
+        self.spinner.stop()
         CliPrinter.info(message, color)
-        self._spinner.start(f"{self.name} is thinking")
+        self.spinner.start(spinner_message)  # Resume spinner with original message
 
     # ------------------------------------------------------------------ #
     #  Extension hooks — override in subclasses for custom behaviour      #
@@ -189,13 +145,11 @@ class BaseResponder(Notify):
 
         - Use the public helper methods for UI feedback inside this method:
 
-            self.emit_tool_event("my_tool")          # ⚙ tool: my_tool
-            self.emit_tool_event("my_tool", "done")  # ✓ tool: my_tool
-            self.update_spinner("Fetching data")
-            self.print_info("Found 3 results")
-            self.pause_spinner()
-            print("  anything you like")
-            self.resume_spinner()
+            - `self.emit_tool_event(name, status)`   — show a tool-call line
+            - `self.spinner.start(message)`          — restart spinner after a pause
+            - `self.spinner.update(message)`         — change the spinner label
+            - `self.spinner.stop()`                  — stop spinner (e.g. before printing)
+            - `self.print_info(message, color)`      — print a styled info line
 
         Requires:
 
@@ -275,34 +229,32 @@ class BaseResponder(Notify):
     def on_listen_start(self) -> None:
         # Start a spinner immediately to indicate we're processing the wake event and listening;
         # this also gives a visual cue that the wake was detected successfully and the responder is active
-        self.update_spinner(f"{self.name} is listening for {self.listen_duration}s")
+        self.spinner.update(f"{self.name} is listening for {self.listen_duration}s")
 
     def on_user_input(self, user_input: str) -> None:
-        CliPrinter.label("USER:", user_input)
+        CliPrinter.label("User:", user_input)
 
         if self.interactive:
-            self._spinner.start("Checking for clarifications")
-            self._spinner.stop()
+            self.spinner.start(f"Asking {self.name} if any clarifications are needed")
             self._enriched_input = self.clarify(user_input)
+            self.spinner.stop()
         else:
             self._enriched_input = user_input
 
         self._start_time = time.time()
-        self._spinner.start(f"{self.name} is thinking")
+        self.spinner.start_with_verbs(self.name, interval=15)
 
     def on_response(self, response: str) -> None:
         elapsed = time.time() - self._start_time
-        self._spinner.stop()
+        self.spinner.stop()
         if response:
             CliPrinter.print_response(self.name, response)
-            print(
-                f"\n{CliColor.GREEN}✓{CliColor.RESET}  {CliColor.DIM}Done in {elapsed:.1f}s{CliColor.RESET}"
-            )
+            CliPrinter.print_status(self.name, success=True, elapsed=elapsed)
         else:
-            print(f"{CliColor.RED}✗  No response received.{CliColor.RESET}")
+            CliPrinter.print_status(self.name, success=False, elapsed=elapsed)
 
     def on_listen_end(self) -> None:
-        self.pause_spinner()
+        self.spinner.stop()
 
     def __call__(self) -> str:
         """
@@ -326,7 +278,7 @@ class BaseResponder(Notify):
             response = self.respond(self._enriched_input)
             self.on_after_respond(self._enriched_input, response)
         except Exception as exc:
-            self._spinner.stop()
+            self.spinner.stop()
             print(f"  {CliColor.RED}✗  Error: {exc}{CliColor.RESET}\n")
             return ""
         self.on_response(response)
@@ -351,10 +303,11 @@ class BaseResponder(Notify):
             - Type: list[str]
             - What: List of words that can be spoken to terminate the responder
         """
-        CliPrinter.header(self.name, "")
-        print(
-            f"  {CliColor.GRAY}Wake words  : {CliColor.WHITE}{', '.join(wake_words)}{CliColor.RESET}\n"
-            f"  {CliColor.GRAY}Terminate   : {CliColor.WHITE}{', '.join(terminate_words)}{CliColor.RESET}\n"
-            f"  {CliColor.GRAY}Interactive : {CliColor.WHITE}{self.interactive}{CliColor.RESET}\n"
+        CliPrinter.header(self.name)
+        CliPrinter.kwarg_inputs(
+            wake_words=wake_words,
+            terminate_words=terminate_words,
+            interactive=self.interactive
         )
+        CliPrinter.empty_line()
         self.wait_for_next_wake_word()
