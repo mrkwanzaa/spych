@@ -19,10 +19,10 @@ wake = SpychWake(
         "claude": claude,
     },
     whisper_model="tiny.en",
-    terminate_words=["terminate"]
+    terminate_words=["terminate"],
 )
-ollama.ready_message(wake_words = ["llama"], terminate_words = ["terminate"])
+ollama.ready_message(wake_words=["llama"], terminate_words=["terminate"])
 ollama.spinner.stop()
-claude.ready_message(wake_words = ["claude"], terminate_words = ["terminate"])
+claude.ready_message(wake_words=["claude"], terminate_words=["terminate"])
 
 wake.start()
