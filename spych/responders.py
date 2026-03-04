@@ -55,7 +55,7 @@ class BaseResponder(Notify):
           cycle; subclasses only need to handle the response logic
         """
         self.spych_object = spych_object
-        self.listen_duration = listen_duration
+        self.listen_duration = max(listen_duration, 3)  # enforce a minimum listen duration of 3 seconds
         self.name = name if name else self.__class__.__name__
         self.spinner = CliSpinner()
         self._start_time: float = 0.0
@@ -247,8 +247,7 @@ class BaseResponder(Notify):
     
     def ready_message(
         self,
-        wake_words: list[str],
-        terminate_words: list[str],
+        **kwargs
     ) -> None:
         """
         Formats and prints the ready message when the responder is initialized, showing the wake words and terminate words.
@@ -264,9 +263,6 @@ class BaseResponder(Notify):
             - What: List of words that can be spoken to terminate the responder
         """
         CliPrinter.header(self.name)
-        CliPrinter.kwarg_inputs(
-            wake_words=wake_words,
-            terminate_words=terminate_words
-        )
+        CliPrinter.kwarg_inputs(**kwargs)
         CliPrinter.empty_line()
         self.wait_for_next_wake_word()

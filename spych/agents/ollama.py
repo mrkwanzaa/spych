@@ -197,5 +197,5 @@ def ollama(
     spych_wake_object = SpychWake(**spych_wake_kwargs)
 
     # Fire ready message and start wake listener
-    responder.ready_message(wake_words, terminate_words)
+    responder.ready_message(wake_words=wake_words, terminate_words=terminate_words)
     spych_wake_object.start()
