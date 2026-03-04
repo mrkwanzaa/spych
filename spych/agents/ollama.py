@@ -8,7 +8,7 @@ class OllamaResponder(BaseResponder):
     def __init__(
         self,
         spych_object: "Spych",
-        model: str = "llama3.2:latest",
+        model: str,
         history_length: int = 10,
         host: str = "http://localhost:11434",
         listen_duration: int | float = 5,
@@ -26,13 +26,13 @@ class OllamaResponder(BaseResponder):
             - Type: Spych
             - What: An initialized Spych instance used to record and transcribe audio
 
-        Optional:
-
         - `model`:
             - Type: str
             - What: The Ollama model name to use for generating responses
-            - Default: "llama3.2:latest"
+            - Example: "llama3.2:latest"
             - Note: Run `ollama list` in your terminal to see available models
+
+        Optional:
 
         - `history_length`:
             - Type: int
@@ -107,7 +107,7 @@ class OllamaResponder(BaseResponder):
 
 
 def ollama(
-    model: str = "llama3.2:latest",
+    model: str,
     wake_words: list[str] = ["llama", "ollama", "lama"],
     terminate_words: list[str] = ["terminate"],
     listen_duration: int | float = 5,
@@ -122,13 +122,15 @@ def ollama(
     - Starts a wake word listener that pipes detected speech into a locally running
       Ollama instance
 
-    Optional:
+    Requires:
 
     - `model`:
         - Type: str
         - What: The Ollama model name to use for generating responses
-        - Default: "llama3.2:latest"
+        - Example: "llama3.2:latest"
         - Note: Run `ollama list` in your terminal to see available models
+
+    Optional:
 
     - `wake_words`:
         - Type: list[str]
